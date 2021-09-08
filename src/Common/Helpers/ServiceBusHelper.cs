@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.ServiceModel;
@@ -4884,6 +4885,24 @@ namespace ServiceBusExplorer
         private string AttemptToReadByteArrayBody(BrokeredMessage brokeredMessage)
         {
             var body = brokeredMessage.GetBody<byte[]>();
+
+            if (brokeredMessage.ContentType != null &&
+                brokeredMessage.ContentType.Equals("application/gzip", StringComparison.InvariantCultureIgnoreCase))
+            {
+                using (var memoryStreamIn = new MemoryStream(body))
+                {
+                    using (var memoryStreamOut = new MemoryStream())
+                    {
+                        using (var gzipStream = new GZipStream(memoryStreamIn, CompressionMode.Decompress))
+                        {
+                            gzipStream.CopyTo(memoryStreamOut);
+                        }
+
+                        return Encoding.UTF8.GetString(memoryStreamOut.ToArray());
+                    }
+                }
+            }
+
             return Encoding.UTF8.GetString(body);
         }
 
@@ -5313,9 +5332,9 @@ namespace ServiceBusExplorer
             var administrationClient = new ServiceBusAdministrationClient(connectionString);
             var result = new List<QueueProperties>();
 
-            foreach(QueueDescription oldQueueDescription in oldQueueDescriptions)
+            foreach (QueueDescription oldQueueDescription in oldQueueDescriptions)
             {
-               result.Add(await administrationClient.GetQueueAsync(oldQueueDescription.Path).ConfigureAwait(false));
+                result.Add(await administrationClient.GetQueueAsync(oldQueueDescription.Path).ConfigureAwait(false));
             }
 
             return result;
