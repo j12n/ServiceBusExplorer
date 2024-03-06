@@ -4772,6 +4772,11 @@ namespace ServiceBusExplorer
                     var encoding = inboundMessage.Properties["Content-Encoding"].ToString();
                     gzipDecompress = encoding == "gzip";
                 }
+                else if (messageToRead.ContentType == "gzip" || messageToRead.ContentType == "application/gzip")
+                {
+                    gzipDecompress = true;
+                }
+
                 if (stream != null)
                 {
                     var element = new BinaryMessageEncodingBindingElement
@@ -4936,23 +4941,6 @@ namespace ServiceBusExplorer
             {
                return DecompressAsString(body);
             }
-            else if (brokeredMessage.ContentType != null &&
-                brokeredMessage.ContentType.Equals("application/gzip", StringComparison.InvariantCultureIgnoreCase))
-            {
-                using (var memoryStreamIn = new MemoryStream(body))
-                {
-                    using (var memoryStreamOut = new MemoryStream())
-                    {
-                        using (var gzipStream = new GZipStream(memoryStreamIn, CompressionMode.Decompress))
-                        {
-                            gzipStream.CopyTo(memoryStreamOut);
-                        }
-
-                        return Encoding.UTF8.GetString(memoryStreamOut.ToArray());
-                    }
-                }
-            }
-
             return Encoding.UTF8.GetString(body);
         }
 
