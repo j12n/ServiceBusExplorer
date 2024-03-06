@@ -91,6 +91,8 @@ namespace ServiceBusExplorer.Forms
         private const string CreateConsumerGroup = "Create Consumer Group";
         private const string CreateNotificationHub = "Create Notification Hub";
         private const string AddRule = "Add Rule";
+        private const string DuplicateSubscriptionFormat = "Duplicate Subscription: {0}";
+        private const string DuplicateQueueFormat = "Duplicate Queue: {0}";
         private const string ViewQueueFormat = "View Queue: {0}";
         private const string ViewTopicFormat = "View Topic: {0}";
         private const string ViewSubscriptionFormat = "View Subscription: {0}";
@@ -1945,6 +1947,10 @@ namespace ServiceBusExplorer.Forms
 
                     var configuration = TwoFilesConfiguration.Create(configFileUse, WriteToLog);
 
+                    bool disableAccidentalDeletionPrevention = configuration.GetBoolValue(
+                                                            ConfigurationParameters.DisableAccidentalDeletionPrevention,
+                                                            defaultValue: false);
+
                     // Root Node
                     if (serviceBusTreeView.SelectedNode == rootNode)
                     {
@@ -2137,6 +2143,11 @@ namespace ServiceBusExplorer.Forms
                     {
                         using (var deleteForm = new DeleteForm(queueDescription.Path, QueueEntity.ToLower()))
                         {
+                            if (!disableAccidentalDeletionPrevention)
+                            {
+                                deleteForm.ShowAccidentalDeletionPreventionCheck(configuration, $"Delete {queueDescription.Path} {QueueEntity.ToLower()}");
+                            }
+
                             if (deleteForm.ShowDialog() == DialogResult.OK)
                             {
                                 await serviceBusHelper.DeleteQueue(queueDescription);
@@ -2162,6 +2173,11 @@ namespace ServiceBusExplorer.Forms
                         {
                             using (var deleteForm = new DeleteForm(DeleteAllSubscriptions))
                             {
+                                if (!disableAccidentalDeletionPrevention)
+                                {
+                                    deleteForm.ShowAccidentalDeletionPreventionCheck(configuration, $"Delete {subscriptionDescriptions.Count} subscriptions");
+                                }
+
                                 if (deleteForm.ShowDialog() == DialogResult.OK)
                                 {
                                     await serviceBusHelper.DeleteSubscriptions(subscriptionDescriptions);
@@ -2176,6 +2192,11 @@ namespace ServiceBusExplorer.Forms
                     {
                         using (var deleteForm = new DeleteForm(topicDescription.Path, TopicEntity.ToLower()))
                         {
+                            if (!disableAccidentalDeletionPrevention)
+                            {
+                                deleteForm.ShowAccidentalDeletionPreventionCheck(configuration, $"Delete {TopicEntity.ToLower()} {topicDescription.Path}");
+                            }
+
                             if (deleteForm.ShowDialog() == DialogResult.OK)
                             {
                                 await serviceBusHelper.DeleteTopic(topicDescription);
@@ -2189,6 +2210,11 @@ namespace ServiceBusExplorer.Forms
                     {
                         using (var deleteForm = new DeleteForm(relayDescription.Path, RelayEntity.ToLower()))
                         {
+                            if (!disableAccidentalDeletionPrevention)
+                            {
+                                deleteForm.ShowAccidentalDeletionPreventionCheck(configuration, $"Delete {RelayEntity.ToLower()} {relayDescription.Path}");
+                            }
+
                             if (deleteForm.ShowDialog() == DialogResult.OK)
                             {
                                 await serviceBusHelper.DeleteRelay(relayDescription.Path);
@@ -2276,6 +2302,11 @@ namespace ServiceBusExplorer.Forms
                             {
                                 if (deleteForm.ShowDialog() == DialogResult.OK)
                                 {
+                                    if (!disableAccidentalDeletionPrevention)
+                                    {
+                                        deleteForm.ShowAccidentalDeletionPreventionCheck(configuration, $"Delete {subscriptionDescriptions.Count()} subscriptions");
+                                    }
+
                                     await serviceBusHelper.DeleteSubscriptions(subscriptionDescriptions);
                                 }
                             }
@@ -2291,6 +2322,11 @@ namespace ServiceBusExplorer.Forms
                         {
                             using (var deleteForm = new DeleteForm(subscriptionWrapper.SubscriptionDescription.Name, SubscriptionEntity.ToLower()))
                             {
+                                if (!disableAccidentalDeletionPrevention)
+                                {
+                                    deleteForm.ShowAccidentalDeletionPreventionCheck(configuration, $"Delete {SubscriptionEntity.ToLower()} {subscriptionWrapper.SubscriptionDescription.Name}");
+                                }
+
                                 if (deleteForm.ShowDialog() == DialogResult.OK)
                                 {
                                     await serviceBusHelper.DeleteSubscription(subscriptionWrapper.SubscriptionDescription);
@@ -4005,7 +4041,14 @@ namespace ServiceBusExplorer.Forms
         #region Public Static Methods
         public static void StaticWriteToLog(string message, bool async = true)
         {
-            mainSingletonMainForm.WriteToLog(message);
+            if(mainSingletonMainForm != null)
+            {
+                mainSingletonMainForm.WriteToLog(message);
+            }
+            else
+            {
+                MessageBox.Show(message);
+            }
         }
         #endregion
 
@@ -4683,12 +4726,13 @@ namespace ServiceBusExplorer.Forms
             return consumerGroupNode;
         }
 
-        private void ShowQueue(QueueDescription queue, string path)
+        private void ShowQueue(QueueDescription queue, string path, bool duplicateQueue = false)
         {
             HandleQueueControl queueControl = null;
 
             try
             {
+                var configuration = TwoFilesConfiguration.Create(configFileUse, WriteToLog);
                 panelMain.SuspendDrawing();
                 foreach (var userControl in panelMain.Controls.OfType<UserControl>())
                 {
@@ -4696,7 +4740,7 @@ namespace ServiceBusExplorer.Forms
                 }
                 panelMain.Controls.Clear();
                 panelMain.BackColor = SystemColors.GradientInactiveCaption;
-                queueControl = new HandleQueueControl(WriteToLog, serviceBusHelper, queue, path);
+                queueControl = new HandleQueueControl(WriteToLog, serviceBusHelper, queue, path, duplicateQueue);
                 queueControl.SuspendDrawing();
                 queueControl.Location = new Point(1, panelLog.HeaderHeight + 1);
                 panelMain.Controls.Add(queueControl);
@@ -4755,7 +4799,13 @@ namespace ServiceBusExplorer.Forms
             }
         }
 
-        private void ShowSubscription(SubscriptionWrapper wrapper)
+        /// <summary>
+        /// Shows the subscription panel.
+        /// Depending on the current state this either draws a Create, Duplicate or Read view panel.
+        /// </summary>
+        /// <param name="wrapper">Wrapper to </param>
+        /// <param name="duplicateCurrentSubscription">If set the rendered subscription panel will be a "Duplicate" form.</param>
+        private void ShowSubscription(SubscriptionWrapper wrapper, bool duplicateCurrentSubscription = false) 
         {
             HandleSubscriptionControl subscriptionControl = null;
 
@@ -4768,7 +4818,7 @@ namespace ServiceBusExplorer.Forms
                 }
                 panelMain.Controls.Clear();
                 panelMain.BackColor = SystemColors.GradientInactiveCaption;
-                subscriptionControl = new HandleSubscriptionControl(WriteToLog, serviceBusHelper, wrapper);
+                subscriptionControl = new HandleSubscriptionControl(WriteToLog, serviceBusHelper, wrapper, duplicateCurrentSubscription);
                 subscriptionControl.SuspendDrawing();
                 subscriptionControl.Location = new Point(1, panelLog.HeaderHeight + 1);
                 panelMain.Controls.Add(subscriptionControl);
@@ -6706,7 +6756,7 @@ namespace ServiceBusExplorer.Forms
                 }
 
                 List<SubscriptionWrapper> subscriptions = new List<SubscriptionWrapper>();
-                Func<TreeNode, IEnumerable<SubscriptionWrapper>> subscriptionsExtractor = tn => tn.FirstNode.Nodes.Cast<TreeNode>().Select(n => n.Tag as SubscriptionWrapper);
+                Func<TreeNode, IEnumerable<SubscriptionWrapper>> subscriptionsExtractor = tn => tn.FirstNode?.Nodes.Cast<TreeNode>().Select(n => n.Tag as SubscriptionWrapper) ?? Enumerable.Empty<SubscriptionWrapper>();
 
                 List<QueueDescription> queues = new List<QueueDescription>();
 
@@ -6788,6 +6838,20 @@ namespace ServiceBusExplorer.Forms
                 else if (child.Tag is UrlSegmentWrapper)
                     this.FindTopicsNodesRecursive(topicNodes, child);
             }
+        }
+        
+        private void duplicateSubscriptionMenuItem_Click(object sender, EventArgs e)
+        {
+            var subscriptionWrapper = serviceBusTreeView.SelectedNode.Tag as SubscriptionWrapper;
+            panelMain.HeaderText = string.Format(DuplicateSubscriptionFormat, subscriptionWrapper.SubscriptionDescription.Name);
+            ShowSubscription(subscriptionWrapper, true);
+        }
+
+        private void duplicateQueueMenuItem_Click(object sender, EventArgs e)
+        {
+            var queueWrappper = serviceBusTreeView.SelectedNode.Tag as QueueDescription;
+            panelMain.HeaderText = string.Format(DuplicateQueueFormat, queueWrappper.Path);
+            ShowQueue(queueWrappper, queueWrappper.Path, true);
         }
     }
 }

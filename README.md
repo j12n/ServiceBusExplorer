@@ -1,7 +1,5 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/x5niu29yhun36hda/branch/master?svg=true)](https://ci.appveyor.com/project/seanfeldman/servicebusexplorer/branch/master)
-
 **Author:** Paolo Salvatori ([@babosbird](https://twitter.com/babosbird))  
-**Collaborators:**  Sean Feldman ([@sfeldman](https://twitter.com/sfeldman)) and Erik Mogensen  
+**Collaborators:**  Sean Feldman ([@sfeldman](https://twitter.com/sfeldman)) and Erik Mogensen ([@koltrast](https://twitter.com/koltrast))  
 **Contributors:** [Many](https://github.com/paolosalvatori/ServiceBusExplorer/graphs/contributors)
 
 # Service Bus Explorer
@@ -9,13 +7,29 @@ The Service Bus Explorer allows users to efficiently administer messaging entiti
 
 ![Service Bus Explorer](./media/service-bus-explorer.png)
 
+# Software requirements
+The following software is required to run ServiceBusExplorer. It may run on other versions.
+
+- Windows 10 or later
+- .NET Framework 4.6.2
+
 # Installation
 ## Using [Chocolatey](https://chocolatey.org/install)
 ```
 choco install ServiceBusExplorer
 ```
 
+The default location of the executable is C:\ProgramData\chocolatey\lib\ServiceBusExplorer\tools\ServiceBusExplorer.exe.
+
 More information on our [Chocolatey page](https://chocolatey.org/packages/ServiceBusExplorer).
+
+## Using [Scoop](https://scoop.sh)
+
+```
+scoop install extras/servicebusexplorer
+```
+
+The default location of the executable is %USERPROFILE%\scoop\apps\servicebusexplorer\current\tools\ServiceBusExplorer.exe.
 
 ## Using GitHub
 ```
@@ -27,18 +41,17 @@ There are no dedicated developers so development is entirely based on voluntary 
 
 Here are some guidelines concerning contributions:
 
-- All contributions should be done on `develop`
-	- `master` is only for releases
-- Every pull request is built by AppVeyor and should preferably be linked to a GitHub issue.
-- Write unit tests, if applicable
+- All contributions should be done on `main`.
+- Every pull request is built by GitHub Actions and should preferably be linked to a GitHub issue.
+- Write unit tests, if applicable.
 - We have started to migrate from the old SDK to the latest SDKs for Service Bus, Event Hubs, Relay and Notification Hubs. Therefore, new classes should not depend on the old SDK unless absolutely necessary.  
 
 
 # Development Environment
 
-Visual Studio 2019 16.8.0 or later is required to build the solution. 
+Visual Studio 2022 17.2.4 or later is required to build the solution. 
 
-When editing UI elements Visual Studio should run as a DPI-unaware process. For more information about this, see the [Visual Studio documentation](https://docs.microsoft.com/en-us/dotnet/framework/winforms/disable-dpi-awareness-visual-studio). In Visual Studio 2017 15.9.12 the informational bar looks like this ![AutoscalingTurnedOff](./media/AutoscalingTurnedOff.png) when it is running as a DPI-unaware process.
+When editing UI elements Visual Studio should run as a DPI-unaware process. For more information about this, see the [Visual Studio documentation](https://docs.microsoft.com/en-us/dotnet/framework/winforms/disable-dpi-awareness-visual-studio). In Visual Studio 2022 the informational bar looks like this ![AutoscalingTurnedOff](./media/AutoscalingTurnedOff.png) when it is running as a DPI-unaware process.
 
 
 # Azure Service Bus
@@ -56,17 +69,21 @@ The Service Bus Explorer 2.1.0 can be used with the Service Bus for Windows Serv
 # Documentation
 [Here](./docs/documentation.md) you can find the tool documentation and a log of the features implemented over time.
 
-# Videos
-For more information on how to use the Service Bus Explorer, see the following videos on Channel9:
-
-- [Getting Started with Service Bus. Part 3: Service Bus Explorer](http://www.digitalpodcast.com/items/10765228) by Clemens Vasters
-- [Cross Platform Notifications using Windows Azure Notifications Hub](http://channel9.msdn.com/Shows/Cloud+Cover/Episode-116-Cross-Platform-Notifications-using-Windows-Azure-Notifications-Hub) by Elio Damaggio, Nick Harris and Chris Risner.
-
 # Alternative Service Bus Management Tools
 Service Bus Explorer is only one of the management tools available for Azure Service Bus.
 
-Here are a couple of alternatives:
+Here are a couple of alternatives. We do not take responsibility for them though:
 
-- **Microsoft Azure Management Portal** _(SaaS, web based, extremely basic)_
-- **Serverless360** _(paid with free trial, SaaS, web based)_
-- **PowerShell** _([Documentation](https://docs.microsoft.com/en-us/azure/service-bus-messaging/service-bus-manage-with-ps))_
+| Tool                                     | Description                                   |
+| ---------------------------------------- | --------------------------------------------- |
+| Microsoft Azure Management Portal        | SaaS, web based, extremely basic              |
+| Serverless360                            | paid with free trial, SaaS, web based         |
+| [PowerShell]                             | free, open source, cross platform             |
+| [Purple Explorer]                        | free, open source, cross platform             |
+| [Superbus]                               | paid with a free trial, macOS                 |
+| [Service Bus Cloud Explorer]             | paid with a free basic plan, SaaS, web based  |
+
+[PowerShell]: https://docs.microsoft.com/en-us/azure/service-bus-messaging/service-bus-manage-with-ps
+[Purple Explorer]: https://github.com/telstrapurple/PurpleExplorer
+[Superbus]: https://superbus.app/
+[Service Bus Cloud Explorer]: https://cloudbricks.io/products/service_bus_cloud_explorer/

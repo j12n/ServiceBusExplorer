@@ -1,20 +1,20 @@
 ﻿#region Copyright
 //=======================================================================================
-// Microsoft Azure Customer Advisory Team 
+// Microsoft Azure Customer Advisory Team
 //
 // This sample is supplemental to the technical guidance published on my personal
-// blog at http://blogs.msdn.com/b/paolos/. 
-// 
+// blog at http://blogs.msdn.com/b/paolos/.
+//
 // Author: Paolo Salvatori
 //=======================================================================================
 // Copyright (c) Microsoft Corporation. All rights reserved.
-// 
-// LICENSED UNDER THE APACHE LICENSE, VERSION 2.0 (THE "LICENSE"); YOU MAY NOT USE THESE 
-// FILES EXCEPT IN COMPLIANCE WITH THE LICENSE. YOU MAY OBTAIN A COPY OF THE LICENSE AT 
+//
+// LICENSED UNDER THE APACHE LICENSE, VERSION 2.0 (THE "LICENSE"); YOU MAY NOT USE THESE
+// FILES EXCEPT IN COMPLIANCE WITH THE LICENSE. YOU MAY OBTAIN A COPY OF THE LICENSE AT
 // http://www.apache.org/licenses/LICENSE-2.0
-// UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING, SOFTWARE DISTRIBUTED UNDER THE 
-// LICENSE IS DISTRIBUTED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY 
-// KIND, EITHER EXPRESS OR IMPLIED. SEE THE LICENSE FOR THE SPECIFIC LANGUAGE GOVERNING 
+// UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING, SOFTWARE DISTRIBUTED UNDER THE
+// LICENSE IS DISTRIBUTED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, EITHER EXPRESS OR IMPLIED. SEE THE LICENSE FOR THE SPECIFIC LANGUAGE GOVERNING
 // PERMISSIONS AND LIMITATIONS UNDER THE LICENSE.
 //=======================================================================================
 #endregion
@@ -53,6 +53,9 @@ using AzureNotificationHubs = Microsoft.Azure.NotificationHubs;
 namespace ServiceBusExplorer
 // ReSharper restore CheckNamespace
 {
+    using System.IO.Compression;
+    using System.Web.UI.WebControls;
+    using Abstractions;
     using ServiceBusConnectionStringBuilder = Microsoft.ServiceBus.ServiceBusConnectionStringBuilder;
 
     public enum BodyType
@@ -421,6 +424,19 @@ namespace ServiceBusExplorer
             }
         }
 
+        public string ConnectionStringWithoutEntityPath
+        {
+            get
+            {
+                var builder = new ServiceBusConnectionStringBuilder(connectionString)
+                {
+                    EntityPath = string.Empty
+                };
+
+                return builder.ToString();
+            }
+        }
+
         /// <summary>
         /// Gets or sets the connection string.
         /// </summary>
@@ -676,7 +692,7 @@ namespace ServiceBusExplorer
             MessagingFactory factory;
             if (!string.IsNullOrEmpty(ConnectionString))
             {
-                factory = MessagingFactory.CreateFromConnectionString(ConnectionString);
+                factory = MessagingFactory.CreateFromConnectionString(ConnectionStringWithoutEntityPath);
             }
             else
             {
@@ -686,7 +702,7 @@ namespace ServiceBusExplorer
                     TokenProvider = tokenProvider,
                     OperationTimeout = TimeSpan.FromMinutes(5)
                 };
-                // In the first release of the service bus, the only available transport protocol is sb 
+                // In the first release of the service bus, the only available transport protocol is sb
                 if (scheme == DefaultScheme)
                 {
                     messagingFactorySettings.NetMessagingTransportSettings = new NetMessagingTransportSettings();
@@ -720,29 +736,18 @@ namespace ServiceBusExplorer
                 throw new Exception($"Could not contact host in connection string: { serviceBusNamespace.ConnectionString }.");
             }
 
-            Func<bool> func = (() =>
+            var func = (() =>
             {
                 connectionString = serviceBusNamespace.ConnectionString;
                 currentSharedAccessKey = serviceBusNamespace.SharedAccessKey;
                 currentSharedAccessKeyName = serviceBusNamespace.SharedAccessKeyName;
                 currentTransportType = serviceBusNamespace.TransportType;
 
-                // The NamespaceManager class can be used for managing entities, 
-                // such as queues, topics, subscriptions, and rules, in your service namespace. 
-                // You must provide service namespace address and access credentials in order 
+                // The NamespaceManager class can be used for managing entities,
+                // such as queues, topics, subscriptions, and rules, in your service namespace.
+                // You must provide service namespace address and access credentials in order
                 // to manage your service namespace.
-                if (serviceBusNamespace.EntityPath != string.Empty)
-                {
-                    var csBuilder = new ServiceBusConnectionStringBuilder(connectionString)
-                    {
-                        EntityPath = string.Empty
-                    };
-                    namespaceManager = Microsoft.ServiceBus.NamespaceManager.CreateFromConnectionString(connectionString = csBuilder.ToString());
-                }
-                else
-                {
-                    namespaceManager = Microsoft.ServiceBus.NamespaceManager.CreateFromConnectionString(connectionString);
-                }
+                namespaceManager = Microsoft.ServiceBus.NamespaceManager.CreateFromConnectionString(ConnectionStringWithoutEntityPath);
 
                 // Set retry count
                 if (namespaceManager.Settings.RetryPolicy is Microsoft.ServiceBus.RetryExponential defaultServiceBusRetryExponential)
@@ -778,7 +783,7 @@ namespace ServiceBusExplorer
 
                 // As the name suggests, the MessagingFactory class is a Factory class that allows to create
                 // instances of the QueueClient, TopicClient and SubscriptionClient classes.
-                MessagingFactory = MessagingFactory.CreateFromConnectionString(connectionString);
+                MessagingFactory = MessagingFactory.CreateFromConnectionString(ConnectionStringWithoutEntityPath);
                 WriteToLogIf(traceEnabled, MessageFactorySuccessfullyCreated);
                 return true;
             });
@@ -806,7 +811,7 @@ namespace ServiceBusExplorer
         /// <summary>
         /// Retrieves an enumerable collection of all relays in the service bus namespace.
         /// </summary>
-        /// <returns>Returns an IEnumerable<RelayDescription/> collection of all relays in the service namespace. 
+        /// <returns>Returns an IEnumerable<RelayDescription/> collection of all relays in the service namespace.
         ///          Returns an empty collection if no relay exists in this service namespace.</returns>
         public IEnumerable<RelayDescription> GetRelays(int timeoutInSeconds)
         {
@@ -952,7 +957,7 @@ namespace ServiceBusExplorer
         /// <summary>
         /// Retrieves an enumerable collection of all event hubs in the service bus namespace.
         /// </summary>
-        /// <returns>Returns an IEnumerable<EventHubDescription/> collection of all event hubs in the service namespace. 
+        /// <returns>Returns an IEnumerable<EventHubDescription/> collection of all event hubs in the service namespace.
         ///          Returns an empty collection if no event hub exists in this service namespace.</returns>
         public Task<IEnumerable<EventHubDescription>> GetEventHubs(int timeoutInSeconds)
         {
@@ -1225,7 +1230,7 @@ namespace ServiceBusExplorer
         /// Retrieves the collection of consumer groups of the event hub passed as a parameter.
         /// </summary>
         /// <param name="eventHubPath">The path of a event hub.</param>
-        /// <param name="name">The name of a consumer group.</param> 
+        /// <param name="name">The name of a consumer group.</param>
         /// <returns>Returns an IEnumerable<SubscriptionDescription/> collection of consumer groups attached to the event hub passed as a parameter.</returns>
         public ConsumerGroupDescription GetConsumerGroup(string eventHubPath, string name)
         {
@@ -1416,7 +1421,7 @@ namespace ServiceBusExplorer
         /// <summary>
         /// Retrieves an enumerable collection of all notification hubs in the service bus namespace.
         /// </summary>
-        /// <returns>Returns an IEnumerable<NotificationHubDescription/> collection of all notification hubs in the service namespace. 
+        /// <returns>Returns an IEnumerable<NotificationHubDescription/> collection of all notification hubs in the service namespace.
         ///          Returns an empty collection if no notification hub exists in this service namespace.</returns>
         public IEnumerable<AzureNotificationHubs.NotificationHubDescription> GetNotificationHubs(int timeoutInSeconds)
         {
@@ -1551,8 +1556,8 @@ namespace ServiceBusExplorer
         /// <summary>
         /// Retrieves an enumerable collection of all queues in the service bus namespace.
         /// </summary>
-        /// <param name="filter">OData filter.</param> 
-        /// <returns>Returns an IEnumerable<QueueDescription/> collection of all queues in the service namespace. 
+        /// <param name="filter">OData filter.</param>
+        /// <returns>Returns an IEnumerable<QueueDescription/> collection of all queues in the service namespace.
         ///          Returns an empty collection if no queue exists in this service namespace.</returns>
         public IEnumerable<QueueDescription> GetQueues(string filter, int timeoutInSeconds)
         {
@@ -1645,8 +1650,8 @@ namespace ServiceBusExplorer
         /// <summary>
         /// Retrieves an enumerable collection of all message sessions for the queue passed as argument.
         /// </summary>
-        /// <param name="path">The queue for which to search message sessions.</param> 
-        /// <param name="dateTime">The time the session was last updated.</param> 
+        /// <param name="path">The queue for which to search message sessions.</param>
+        /// <param name="dateTime">The time the session was last updated.</param>
         /// <returns>Returns an IEnumerable<QueueDescription/> collection of message sessions.</returns>
         public IEnumerable<MessageSession> GetMessageSessions(string path, DateTime? dateTime)
         {
@@ -1666,8 +1671,8 @@ namespace ServiceBusExplorer
         /// <summary>
         /// Retrieves an enumerable collection of all message sessions for the queue passed as argument.
         /// </summary>
-        /// <param name="queue">The queue for which to search message sessions.</param> 
-        /// <param name="dateTime">The time the session was last updated.</param> 
+        /// <param name="queue">The queue for which to search message sessions.</param>
+        /// <param name="dateTime">The time the session was last updated.</param>
         /// <returns>Returns an IEnumerable<QueueDescription/> collection of message sessions.</returns>
         public IEnumerable<MessageSession> GetMessageSessions(QueueDescription queue, DateTime? dateTime)
         {
@@ -1705,8 +1710,8 @@ namespace ServiceBusExplorer
         /// <summary>
         /// Retrieves an enumerable collection of all topics in the service bus namespace.
         /// </summary>
-        /// <param name="filter">OData filter.</param> 
-        /// <returns>Returns an IEnumerable<TopicDescription/> collection of all topics in the service namespace. 
+        /// <param name="filter">OData filter.</param>
+        /// <returns>Returns an IEnumerable<TopicDescription/> collection of all topics in the service namespace.
         ///          Returns an empty collection if no topic exists in this service namespace.</returns>
         public IEnumerable<TopicDescription> GetTopics(string filter, int timeoutInSeconds)
         {
@@ -1845,8 +1850,8 @@ namespace ServiceBusExplorer
         /// <summary>
         /// Retrieves an enumerable collection of all message sessions for the subscription passed as argument.
         /// </summary>
-        /// <param name="subscription">The subscription for which to search message sessions.</param> 
-        /// <param name="dateTime">The time the session was last updated.</param> 
+        /// <param name="subscription">The subscription for which to search message sessions.</param>
+        /// <param name="dateTime">The time the session was last updated.</param>
         /// <returns>Returns an IEnumerable<QueueDescription/> collection of message sessions.</returns>
         public IEnumerable<MessageSession> GetMessageSessions(SubscriptionDescription subscription, DateTime? dateTime)
         {
@@ -2512,7 +2517,7 @@ namespace ServiceBusExplorer
                                                                                                            subscriptionDescription.Name),
                                                                                                            writeToLog);
             RetryHelper.RetryAction(() => subscriptionClient.AddRule(ruleDescription), writeToLog);
-            Func<IEnumerable<RuleDescription>> func = (() => namespaceManager.GetRules(subscriptionDescription.TopicPath, subscriptionDescription.Name));
+            var func = (() => namespaceManager.GetRules(subscriptionDescription.TopicPath, subscriptionDescription.Name));
             var rules = RetryHelper.RetryFunc(func, writeToLog);
             var rule = rules.FirstOrDefault(r => r.Name == ruleDescription.Name);
             WriteToLogIf(traceEnabled, string.Format(CultureInfo.CurrentCulture, RuleCreated, ruleDescription.Name, subscriptionDescription.Name));
@@ -4758,9 +4763,15 @@ namespace ServiceBusExplorer
                 return null;
             }
             var inboundMessage = messageToRead.Clone();
+            bool gzipDecompress = false;
             try
             {
                 stream = inboundMessage.GetBody<Stream>();
+                if (messageToRead.Properties.ContainsKey("Content-Encoding"))
+                {
+                    var encoding = inboundMessage.Properties["Content-Encoding"].ToString();
+                    gzipDecompress = encoding == "gzip";
+                }
                 if (stream != null)
                 {
                     var element = new BinaryMessageEncodingBindingElement
@@ -4777,6 +4788,15 @@ namespace ServiceBusExplorer
                     var encoderFactory = element.CreateMessageEncoderFactory();
                     var encoder = encoderFactory.Encoder;
                     var stringBuilder = new StringBuilder();
+                    if (gzipDecompress)
+                    {
+                        var mso = new MemoryStream();
+                        using (var gs = new GZipStream(stream, CompressionMode.Decompress))
+                        {
+                            gs.CopyTo(mso);
+                        }
+                        stream = mso;
+                    }
                     var message = encoder.ReadMessage(stream, MaxBufferSize);
                     using (var reader = message.GetReaderAtBodyContents())
                     {
@@ -4797,6 +4817,15 @@ namespace ServiceBusExplorer
                 try
                 {
                     stream = inboundMessage.GetBody<Stream>();
+                    if (gzipDecompress)
+                    {
+                        var mso = new MemoryStream();
+                        using (var gs = new GZipStream(stream, CompressionMode.Decompress))
+                        {
+                            gs.CopyTo(mso);
+                        }
+                        stream = mso;
+                    }
                     if (stream != null)
                     {
                         var element = new BinaryMessageEncodingBindingElement
@@ -4824,7 +4853,7 @@ namespace ServiceBusExplorer
                 {
                     try
                     {
-                        messageText = AttemptToReadByteArrayBody(messageToRead.Clone());
+                        messageText = AttemptToReadByteArrayBody(messageToRead.Clone(), gzipDecompress);
                         bodyType = BodyType.ByteArray;
                     }
                     catch (Exception)
@@ -4882,11 +4911,32 @@ namespace ServiceBusExplorer
             return messageText;
         }
 
-        private string AttemptToReadByteArrayBody(BrokeredMessage brokeredMessage)
+        private string DecompressAsString(byte[] bytes)
+        {
+            string result;
+            using (var msi = new MemoryStream(bytes))
+            {
+                using (var mso = new MemoryStream())
+                {
+                    using (var gs = new GZipStream(msi, CompressionMode.Decompress))
+                    {
+                        gs.CopyTo(mso);
+                    }
+                    result = Encoding.UTF8.GetString(mso.ToArray());
+                }
+            }
+
+            return result;
+        }
+
+        private string AttemptToReadByteArrayBody(BrokeredMessage brokeredMessage, bool compress)
         {
             var body = brokeredMessage.GetBody<byte[]>();
-
-            if (brokeredMessage.ContentType != null &&
+            if (compress)
+            {
+               return DecompressAsString(body);
+            }
+            else if (brokeredMessage.ContentType != null &&
                 brokeredMessage.ContentType.Equals("application/gzip", StringComparison.InvariantCultureIgnoreCase))
             {
                 using (var memoryStreamIn = new MemoryStream(body))
@@ -5028,22 +5078,22 @@ namespace ServiceBusExplorer
         /// <param name="bodyType">BodyType</param>
         /// <param name="doNotSerializeBody"></param>
         /// <returns>The content of the EventData.</returns>
-        public string GetMessageText(EventData eventDataToRead, out BodyType bodyType, bool doNotSerializeBody = false)
+        public string GetMessageText(EventDataMessage eventDataToRead, out BodyType bodyType, bool doNotSerializeBody = false)
         {
             string eventDataText = null;
-            Stream stream = null;
             bodyType = BodyType.Stream;
             if (eventDataToRead == null)
             {
                 return null;
             }
-            var inboundMessage = eventDataToRead.Clone();
+
+            using var stream = eventDataToRead.GetBodyStream();
+
             var bBodyParsed = false;
             if (!doNotSerializeBody)
             {
                 try
                 {
-                    stream = inboundMessage.GetBodyStream();
                     if (stream != null)
                     {
                         var element = new BinaryMessageEncodingBindingElement
@@ -5077,12 +5127,12 @@ namespace ServiceBusExplorer
                 }
                 catch (Exception)
                 {
-                    inboundMessage = eventDataToRead.Clone();
                     try
                     {
-                        stream = inboundMessage.GetBodyStream();
                         if (stream != null)
                         {
+                            stream.Seek(0, SeekOrigin.Begin);
+
                             var element = new BinaryMessageEncodingBindingElement
                             {
                                 ReaderQuotas = new XmlDictionaryReaderQuotas
@@ -5140,21 +5190,22 @@ namespace ServiceBusExplorer
             {
                 try
                 {
-                    inboundMessage = eventDataToRead.Clone();
-                    stream = inboundMessage.GetBodyStream();
-                    stream.Seek(0, SeekOrigin.Begin);
-                    using (var reader = new StreamReader(stream))
+                    if (stream != null)
                     {
-                        eventDataText = reader.ReadToEnd();
-                        if (eventDataText.ToCharArray().GroupBy(c => c).
-                            Where(g => char.IsControl(g.Key) && g.Key != '\t' && g.Key != '\n' && g.Key != '\r').
-                            Select(g => g.First()).Any())
+                        stream.Seek(0, SeekOrigin.Begin);
+                        using (var reader = new StreamReader(stream))
                         {
-                            stream.Seek(0, SeekOrigin.Begin);
-                            using (var binaryReader = new BinaryReader(stream))
+                            eventDataText = reader.ReadToEnd();
+                            if (eventDataText.ToCharArray().GroupBy(c => c).
+                                Where(g => char.IsControl(g.Key) && g.Key != '\t' && g.Key != '\n' && g.Key != '\r').
+                                Select(g => g.First()).Any())
                             {
-                                var bytes = binaryReader.ReadBytes((int)stream.Length);
-                                eventDataText = BitConverter.ToString(bytes).Replace('-', ' ');
+                                stream.Seek(0, SeekOrigin.Begin);
+                                using (var binaryReader = new BinaryReader(stream))
+                                {
+                                    var bytes = binaryReader.ReadBytes((int)stream.Length);
+                                    eventDataText = BitConverter.ToString(bytes).Replace('-', ' ');
+                                }
                             }
                         }
                     }
@@ -5281,23 +5332,15 @@ namespace ServiceBusExplorer
             }
         }
 
-        public string GetHostWithoutNamespace()
-        {
-            if (namespaceUri == null ||
-                string.IsNullOrWhiteSpace(namespaceUri.Host))
-            {
-                return null;
-            }
-            var host = namespaceUri.Host;
-            var index = host.IndexOf('.');
-            return host.Substring(index);
-        }
-
         public string GetAddressRelativeToNamespace(string address)
         {
             if (Uri.IsWellFormedUriString(address, UriKind.Absolute))
             {
-                var uri = new Uri(address, UriKind.Absolute);
+                var uri = new UriBuilder(new Uri(address, UriKind.Absolute))
+                {
+                    Scheme = NamespaceUri.Scheme,
+                    Port = NamespaceUri.Port
+                }.Uri;
                 if (NamespaceUri.IsBaseOf(uri))
                 {
                     var uriRelativeToNamespace = NamespaceUri.MakeRelativeUri(uri);
@@ -5314,7 +5357,7 @@ namespace ServiceBusExplorer
 
         public ServiceBusHelper2 GetServiceBusHelper2()
         {
-            var serviceBusHelper2 = new ServiceBusHelper2();
+            var serviceBusHelper2 = new ServiceBusHelper2(writeToLog);
             serviceBusHelper2.ConnectionString = ConnectionString;
             serviceBusHelper2.TransportType = UseAmqpWebSockets
                 ? Azure.Messaging.ServiceBus.ServiceBusTransportType.AmqpWebSockets

@@ -53,13 +53,6 @@ namespace ServiceBusExplorer.Controls
     {
         #region Private Constants
         //***************************
-        // Formats
-        //***************************
-        private const string ExceptionFormat = "Exception: {0}";
-        private const string InnerExceptionFormat = "InnerException: {0}";
-        private const string LabelFormat = "{0:0.000}";
-
-        //***************************
         // Properties & Types
         //***************************
         private const string HeaderName = "Name";
@@ -74,7 +67,6 @@ namespace ServiceBusExplorer.Controls
         //***************************
         // Messages
         //***************************
-        private const string DefaultMessageText = "Hi mate, how are you?";
         private const string MessageCountMustBeANumber = "The Message Count field must be an integer number greater or equal to zero.";
         private const string SendTaskCountMustBeANumber = "The Sender Task Count field must be an integer number greater than zero.";
         private const string MessageCannotBeNull = "The Message field cannot be null.";
@@ -98,10 +90,6 @@ namespace ServiceBusExplorer.Controls
 
         #region Private Instance Fields
         private readonly RelayDescription relayDescription;
-        private readonly MainForm mainForm;
-        private readonly WriteToLogDelegate writeToLog;
-        private readonly Func<Task> stopLog;
-        private readonly Action startLog;
         private readonly BindingSource bindingSource = new BindingSource();
         private System.ServiceModel.Channels.Binding binding;
         private CancellationTokenSource managerCancellationTokenSource;
@@ -117,26 +105,22 @@ namespace ServiceBusExplorer.Controls
         private double senderMaximumTime;
         private double senderAverageTime;
         private double senderTotalTime;
-        private readonly ServiceBusHelper serviceBusHelper;
+        TestControlHelper controlHelper;
         #endregion
 
         #region Public Constructors
-        public TestRelayControl(MainForm mainForm, 
+        public TestRelayControl(MainForm mainForm,
                                 WriteToLogDelegate writeToLog,
                                 Func<Task> stopLog,
                                 Action startLog,
-                                RelayDescription relayDescription, 
+                                RelayDescription relayDescription,
                                 ServiceBusHelper serviceBusHelper)
         {
-            this.mainForm = mainForm;
-            this.writeToLog = writeToLog;
-            this.stopLog = stopLog;
-            this.startLog = startLog;
+            controlHelper = new TestControlHelper(mainForm, writeToLog, stopLog, startLog, serviceBusHelper);
             this.relayDescription = relayDescription;
-            this.serviceBusHelper = serviceBusHelper;
             InitializeComponent();
             InitializeControls();
-        } 
+        }
         #endregion
 
         #region Public Events
@@ -189,7 +173,7 @@ namespace ServiceBusExplorer.Controls
                 }
 
                 bindingSource.DataSource = CustomMessageHeaderInfo.Headers;
-                
+
 
                 // Initialize the DataGridView.
                 headersDataGridView.AutoGenerateColumns = false;
@@ -199,29 +183,29 @@ namespace ServiceBusExplorer.Controls
 
                 // Create the Name column
                 var textBoxColumn = new DataGridViewTextBoxColumn
-                                        {
-                                            DataPropertyName = HeaderName, 
-                                            Name = HeaderName, 
-                                            Width = 90
-                                        };
+                {
+                    DataPropertyName = HeaderName,
+                    Name = HeaderName,
+                    Width = 90
+                };
                 headersDataGridView.Columns.Add(textBoxColumn);
 
                 // Create the Type column
                 textBoxColumn = new DataGridViewTextBoxColumn
-                                        {
-                                            DataPropertyName = HeaderNamespace,
-                                            Name = HeaderNamespace,
-                                            Width = 84
-                                        };
+                {
+                    DataPropertyName = HeaderNamespace,
+                    Name = HeaderNamespace,
+                    Width = 84
+                };
                 headersDataGridView.Columns.Add(textBoxColumn);
 
                 // Create the Value column
                 textBoxColumn = new DataGridViewTextBoxColumn
-                                    {
-                                        DataPropertyName = HeaderValue, 
-                                        Name = HeaderValue, 
-                                        Width = 102
-                                    };
+                {
+                    DataPropertyName = HeaderValue,
+                    Name = HeaderValue,
+                    Width = 102
+                };
                 headersDataGridView.Columns.Add(textBoxColumn);
 
                 // Set Grid style
@@ -239,8 +223,6 @@ namespace ServiceBusExplorer.Controls
                 // The value for alternating rows overrides the value for all rows. 
                 headersDataGridView.RowsDefaultCellStyle.BackColor = SystemColors.Window;
                 headersDataGridView.RowsDefaultCellStyle.ForeColor = SystemColors.ControlText;
-                //headersDataGridView.AlternatingRowsDefaultCellStyle.BackColor = Color.White;
-                //headersDataGridView.AlternatingRowsDefaultCellStyle.ForeColor = SystemColors.ControlText;
 
                 // Set the row and column header styles.
                 headersDataGridView.RowHeadersDefaultCellStyle.BackColor = Color.FromArgb(215, 228, 242);
@@ -248,11 +230,10 @@ namespace ServiceBusExplorer.Controls
                 headersDataGridView.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(215, 228, 242);
                 headersDataGridView.ColumnHeadersDefaultCellStyle.ForeColor = SystemColors.ControlText;
 
-                LanguageDetector.SetFormattedMessage(serviceBusHelper,
-                                                     mainForm != null &&
-                                                     !string.IsNullOrWhiteSpace(mainForm.MessageText) ?
-                                                     mainForm.MessageText :
-                                                     DefaultMessageText,
+                controlHelper.IsReadyToStoreMessageText = true;
+
+                LanguageDetector.SetFormattedMessage(controlHelper.ServiceBusHelper,
+                                                     controlHelper.MainForm.MessageText ?? string.Empty,
                                                      txtMessageText);
 
                 // Set Tooltips
@@ -260,7 +241,6 @@ namespace ServiceBusExplorer.Controls
                 toolTip.SetToolTip(txtSendTaskCount, SendTaskCountTooltip);
 
                 splitContainer.SplitterWidth = 16;
-
             }
             catch (Exception ex)
             {
@@ -272,21 +252,15 @@ namespace ServiceBusExplorer.Controls
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(txtMessageText.Text))
-                {
-                    writeToLog(MessageCannotBeNull);
-                    return false;
-                }
-
                 if (!int.TryParse(txtMessageCount.Text, out var temp) || temp < 0)
                 {
-                    writeToLog(MessageCountMustBeANumber);
+                    controlHelper.WriteToLog(MessageCountMustBeANumber);
                     return false;
                 }
                 messageCount = temp;
                 if (!int.TryParse(txtSendTaskCount.Text, out temp) || temp <= 0)
                 {
-                    writeToLog(SendTaskCountMustBeANumber);
+                    controlHelper.WriteToLog(SendTaskCountMustBeANumber);
                     return false;
                 }
                 senderTaskCount = temp;
@@ -311,11 +285,11 @@ namespace ServiceBusExplorer.Controls
                 }
 
                 if (ValidateParameters() &&
-                    serviceBusHelper != null)
+                    controlHelper.ServiceBusHelper != null)
                 {
-                    if (startLog != null)
+                    if (controlHelper.StartLog != null)
                     {
-                        startLog();
+                        controlHelper.StartLog();
                     }
                     btnStart.Enabled = false;
                     Cursor.Current = Cursors.WaitCursor;
@@ -429,7 +403,7 @@ namespace ServiceBusExplorer.Controls
 
                                     if (oneWay)
                                     {
-                                        outputChannelFactory = new ChannelFactory<IOutputChannel>(binding, serviceBusHelper.GetRelayUri(relayDescription).AbsoluteUri);
+                                        outputChannelFactory = new ChannelFactory<IOutputChannel>(binding, controlHelper.ServiceBusHelper.GetRelayUri(relayDescription).AbsoluteUri);
                                         outputChannelFactory.Endpoint.Contract.SessionMode = SessionMode.Allowed;
                                         if (ServiceBusBindingHelper.GetRelayClientAuthenticationType(binding) == RelayClientAuthenticationType.RelayAccessToken)
                                         {
@@ -441,13 +415,13 @@ namespace ServiceBusExplorer.Controls
                                     {
                                         if (binding is WebHttpRelayBinding)
                                         {
-                                            requestChannelFactory = new WebChannelFactory<IRequestChannel>(binding, serviceBusHelper.GetRelayUri(relayDescription));
+                                            requestChannelFactory = new WebChannelFactory<IRequestChannel>(binding, controlHelper.ServiceBusHelper.GetRelayUri(relayDescription));
                                         }
                                         else
                                         {
-                                            requestChannelFactory = new ChannelFactory<IRequestChannel>(binding, serviceBusHelper.GetRelayUri(relayDescription).AbsoluteUri);
+                                            requestChannelFactory = new ChannelFactory<IRequestChannel>(binding, controlHelper.ServiceBusHelper.GetRelayUri(relayDescription).AbsoluteUri);
                                         }
-                                        
+
                                         requestChannelFactory.Endpoint.Contract.SessionMode = SessionMode.Allowed;
                                         if (ServiceBusBindingHelper.GetRelayClientAuthenticationType(binding) == RelayClientAuthenticationType.RelayAccessToken)
                                         {
@@ -470,7 +444,7 @@ namespace ServiceBusExplorer.Controls
                                                 stopwatch.Start();
                                                 if (outputChannel != null)
                                                 {
-                                                    RetryHelper.RetryAction(() => outputChannel.Send(requestMessage), writeToLog);
+                                                    RetryHelper.RetryAction(() => outputChannel.Send(requestMessage), controlHelper.WriteToLog);
                                                 }
                                             }
                                             finally
@@ -517,7 +491,7 @@ namespace ServiceBusExplorer.Controls
                                                 traceMessage = builder.ToString();
                                                 if (!string.IsNullOrWhiteSpace(traceMessage))
                                                 {
-                                                    writeToLog(traceMessage.Substring(0, traceMessage.Length - 1));
+                                                    controlHelper.WriteToLog(traceMessage.Substring(0, traceMessage.Length - 1));
                                                 }
                                             }
                                         }
@@ -531,7 +505,7 @@ namespace ServiceBusExplorer.Controls
                                                 {
                                                     responseMessage =
                                                         RetryHelper.RetryFunc(
-                                                            () => requestChannel.Request(requestMessage), writeToLog);
+                                                            () => requestChannel.Request(requestMessage), controlHelper.WriteToLog);
                                                 }
                                             }
                                             finally
@@ -609,7 +583,7 @@ namespace ServiceBusExplorer.Controls
                                                 traceMessage = builder.ToString();
                                                 if (!string.IsNullOrWhiteSpace(traceMessage))
                                                 {
-                                                    writeToLog(traceMessage.Substring(0, traceMessage.Length - 1));
+                                                    controlHelper.WriteToLog(traceMessage.Substring(0, traceMessage.Length - 1));
                                                 }
                                             }
                                         }
@@ -680,7 +654,7 @@ namespace ServiceBusExplorer.Controls
                                 traceMessage = builder.ToString();
                                 if (!string.IsNullOrWhiteSpace(traceMessage))
                                 {
-                                    writeToLog(traceMessage.Substring(0, traceMessage.Length - 1));
+                                    controlHelper.WriteToLog(traceMessage.Substring(0, traceMessage.Length - 1));
                                 }
                             };
 
@@ -731,10 +705,10 @@ namespace ServiceBusExplorer.Controls
 
         private TokenProvider CreateTokenProvider()
         {
-            if (!string.IsNullOrWhiteSpace(serviceBusHelper.SharedAccessKeyName) &&
-                !string.IsNullOrWhiteSpace(serviceBusHelper.SharedAccessKey))
+            if (!string.IsNullOrWhiteSpace(controlHelper.ServiceBusHelper.SharedAccessKeyName) &&
+                !string.IsNullOrWhiteSpace(controlHelper.ServiceBusHelper.SharedAccessKey))
             {
-                return TokenProvider.CreateSharedAccessSignatureTokenProvider(serviceBusHelper.SharedAccessKeyName, serviceBusHelper.SharedAccessKey);
+                return TokenProvider.CreateSharedAccessSignatureTokenProvider(controlHelper.ServiceBusHelper.SharedAccessKeyName, controlHelper.ServiceBusHelper.SharedAccessKey);
             }
 
             return null;
@@ -746,10 +720,10 @@ namespace ServiceBusExplorer.Controls
             {
                 return;
             }
-            writeToLog(string.Format(CultureInfo.CurrentCulture, ExceptionFormat, ex.Message));
+            controlHelper.WriteToLog(string.Format(CultureInfo.CurrentCulture, TestControlHelper.ExceptionFormat, ex.Message));
             if (ex.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message))
             {
-                writeToLog(string.Format(CultureInfo.CurrentCulture, InnerExceptionFormat, ex.InnerException.Message));
+                controlHelper.WriteToLog(string.Format(CultureInfo.CurrentCulture, TestControlHelper.InnerExceptionFormat, ex.InnerException.Message));
             }
         }
 
@@ -854,14 +828,16 @@ namespace ServiceBusExplorer.Controls
 
         public async Task CancelActions()
         {
-            if (stopLog != null)
+            if (controlHelper.StopLog != null)
             {
-                await stopLog();
+                await controlHelper.StopLog();
             }
+
             if (managerCancellationTokenSource != null)
             {
                 managerCancellationTokenSource.Cancel();
             }
+
             if (senderCancellationTokenSource != null)
             {
                 senderCancellationTokenSource.Cancel();
@@ -878,7 +854,7 @@ namespace ServiceBusExplorer.Controls
         {
             DrawTabControlTabs(mainTabControl, e, null);
         }
-       
+
         private void checkBoxEnableSenderLogging_CheckedChanged(object sender, EventArgs e)
         {
             checkBoxSenderVerboseLogging.Enabled = checkBoxEnableSenderLogging.Checked;
@@ -894,12 +870,13 @@ namespace ServiceBusExplorer.Controls
             try
             {
                 openFileDialog.FileName = string.Empty;
-                if (openFileDialog.ShowDialog() != DialogResult.OK || 
+                if (openFileDialog.ShowDialog() != DialogResult.OK ||
                     string.IsNullOrWhiteSpace(openFileDialog.FileName) ||
                     !File.Exists(openFileDialog.FileName))
                 {
                     return;
                 }
+
                 using (var reader = new StreamReader(openFileDialog.FileName))
                 {
                     var text = reader.ReadToEnd();
@@ -907,10 +884,11 @@ namespace ServiceBusExplorer.Controls
                     {
                         return;
                     }
-                    LanguageDetector.SetFormattedMessage(serviceBusHelper, text, txtMessageText);
-                    if (mainForm != null)
+
+                    LanguageDetector.SetFormattedMessage(controlHelper.ServiceBusHelper, text, txtMessageText);
+                    if (controlHelper.MainForm != null)
                     {
-                        mainForm.MessageText = text;
+                        controlHelper.MainForm.MessageText = text;
                     }
                 }
             }
@@ -967,10 +945,10 @@ namespace ServiceBusExplorer.Controls
             return ok &&
                    !type.IsPrimitive &&
                    !type.IsEnum &&
-                   type != typeof (string) &&
-                   type != typeof (TimeSpan) &&
-                   type != typeof (DateTime) &&
-                   type != typeof (DateTimeOffset);
+                   type != typeof(string) &&
+                   type != typeof(TimeSpan) &&
+                   type != typeof(DateTime) &&
+                   type != typeof(DateTimeOffset);
         }
 
         private void bindingTreeView_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
@@ -1020,7 +998,7 @@ namespace ServiceBusExplorer.Controls
         {
             lock (this)
             {
-                var elapsedSeconds = (double) elapsedMilliseconds/1000;
+                var elapsedSeconds = (double)elapsedMilliseconds / 1000;
 
                 if (direction == DirectionType.Send)
                 {
@@ -1034,18 +1012,18 @@ namespace ServiceBusExplorer.Controls
                     }
                     senderTotalTime += elapsedSeconds;
                     senderMessageNumber += messageNumber;
-                    senderAverageTime = senderMessageNumber > 0 ? senderTotalTime/senderMessageNumber : 0;
-                    senderMessagesPerSecond = senderTotalTime > 0 ? senderMessageNumber * senderTaskCount/senderTotalTime : 0;
+                    senderAverageTime = senderMessageNumber > 0 ? senderTotalTime / senderMessageNumber : 0;
+                    senderMessagesPerSecond = senderTotalTime > 0 ? senderMessageNumber * senderTaskCount / senderTotalTime : 0;
 
-                    lblSenderLastTime.Text = string.Format(LabelFormat, elapsedSeconds);
+                    lblSenderLastTime.Text = string.Format(TestControlHelper.LabelFormat, elapsedSeconds);
                     lblSenderLastTime.Refresh();
-                    lblSenderAverageTime.Text = string.Format(LabelFormat, senderAverageTime);
+                    lblSenderAverageTime.Text = string.Format(TestControlHelper.LabelFormat, senderAverageTime);
                     lblSenderAverageTime.Refresh();
-                    lblSenderMaximumTime.Text = string.Format(LabelFormat, senderMaximumTime);
+                    lblSenderMaximumTime.Text = string.Format(TestControlHelper.LabelFormat, senderMaximumTime);
                     lblSenderMaximumTime.Refresh();
-                    lblSenderMinimumTime.Text = string.Format(LabelFormat, senderMinimumTime);
+                    lblSenderMinimumTime.Text = string.Format(TestControlHelper.LabelFormat, senderMinimumTime);
                     lblSenderMinimumTime.Refresh();
-                    lblSenderMessagesPerSecond.Text = string.Format(LabelFormat, senderMessagesPerSecond);
+                    lblSenderMessagesPerSecond.Text = string.Format(TestControlHelper.LabelFormat, senderMessagesPerSecond);
                     lblSenderMessagesPerSecond.Refresh();
                     lblSenderMessageNumber.Text = senderMessageNumber.ToString(CultureInfo.InvariantCulture);
                     lblSenderMessageNumber.Refresh();
@@ -1221,10 +1199,7 @@ namespace ServiceBusExplorer.Controls
 
         private void txtMessageText_TextChanged(object sender, FastColoredTextBoxNS.TextChangedEventArgs e)
         {
-            if (!string.IsNullOrWhiteSpace(txtMessageText.Text))
-            {
-                mainForm.MessageText = txtMessageText.Text;
-            }
+            controlHelper.OnMessageTextChanged(txtMessageText.Text);
         }
 
         private void grouperMessageFormat_CustomPaint(PaintEventArgs e)

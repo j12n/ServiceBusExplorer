@@ -30,6 +30,8 @@
     <Description>The Service Bus Explorer allows users to connect to a Service Bus namespace and administer messaging entities in an easy manner. The tool provides advanced features like import/export functionality or the ability to test topic, queues, subscriptions, relay services, notification hubs and events hubs.</Description>
     <Copyright>Copyright 2017 Paolo Salvatori</Copyright>
     <OutputPath>bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <Authors>Paolo Salvatori</Authors>
     <PackageIconUrl></PackageIconUrl>
     <PackageId>servicebusexplorer</PackageId>
@@ -175,9 +177,7 @@
     <Compile Update="Controls\StandardValueEditorUI.designer.cs">
       <DependentUpon>StandardValueEditorUI.cs</DependentUpon>
     </Compile>
-    <Compile Update="Controls\TestRelayControl.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
+    <Compile Update="Controls\TestRelayControl.cs" />
     <Compile Update="Controls\TestRelayControl.Designer.cs">
       <DependentUpon>TestRelayControl.cs</DependentUpon>
     </Compile>
@@ -187,9 +187,7 @@
     <Compile Update="Controls\TestSubscriptionControl.Designer.cs">
       <DependentUpon>TestSubscriptionControl.cs</DependentUpon>
     </Compile>
-    <Compile Update="Controls\TestQueueControl.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
+    <Compile Update="Controls\TestQueueControl.cs" />
     <Compile Update="Controls\TestQueueControl.Designer.cs">
       <DependentUpon>TestQueueControl.cs</DependentUpon>
     </Compile>
@@ -525,7 +523,7 @@
       <PackagePath></PackagePath>
     </None>
     <None Include="Properties\Settings.settings">
-      <Generator>SettingsSingleFileGenerator</Generator>
+      <Generator>PublicSettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
     <Compile Update="Properties\Resources.Designer.cs">
@@ -544,15 +542,9 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.8.0" />
-    <PackageReference Include="GitVersion.CommandLine" Version="5.6.1" />
-    <PackageReference Include="GitVersionTask" Version="5.5.1" />
+    <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="Microsoft.Azure.NotificationHubs" Version="1.0.9" />
-    <PackageReference Include="Microsoft.Azure.Services.AppAuthentication" Version="1.4.0" />
-    <PackageReference Include="Microsoft.IdentityModel.Clients.ActiveDirectory" Version="5.2.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.7.1" />
-    <PackageReference Include="WindowsAzure.ServiceBus" Version="6.1.1" />
+    <PackageReference Include="WindowsAzure.ServiceBus" Version="7.0.1" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Icons\Add.ico" />

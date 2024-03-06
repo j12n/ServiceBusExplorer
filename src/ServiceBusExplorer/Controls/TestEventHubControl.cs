@@ -51,13 +51,6 @@ namespace ServiceBusExplorer.Controls
     {
         #region Private Constants
         //***************************
-        // Formats
-        //***************************
-        private const string ExceptionFormat = "Exception: {0}";
-        private const string InnerExceptionFormat = "InnerException: {0}";
-        private const string LabelFormat = "{0:0.000}";
-
-        //***************************
         // Properties & Types
         //***************************
         private const string PropertyKey = "Key";
@@ -72,13 +65,11 @@ namespace ServiceBusExplorer.Controls
         //***************************
         // Messages
         //***************************
-        private const string MessageCannotBeNull = "The Message field cannot be null.";
-        private const string DefaultMessageText = "Hi mate, how are you?";
         private const string MessageCountMustBeANumber = "The Message Count field must be an integer number greater or equal to zero.";
         private const string SendTaskCountMustBeANumber = "The Sender Task Count field must be an integer number greater than zero.";
         private const string SenderBatchSizeMustBeANumber = "The Sender Batch Size field must be an integer number greater than zero.";
         private const string SenderThinkTimeMustBeANumber = "The Sender Think Time field must be an integer number greater than zero.";
-        private const string NoMessageSelected = "No message to send has been selected.";
+        private const string NoFileSelected = "No file to send has been selected.";
         private const string SelectEventDataGenerator = "Select an EventData generator...";
         private const string InvalidJsonTemplate = "{0} is an invalid JSON template. The file will be used as text message rather than a template.";
         private const string InvalidXmlTemplate = "{0} is an invalid XML template. The file will be used as text message rather than a template.";
@@ -114,11 +105,6 @@ namespace ServiceBusExplorer.Controls
         #region Private Instance Fields
         private readonly EventHubDescription eventHubDescription;
         private readonly PartitionDescription partitionDescription;
-        private readonly ServiceBusHelper serviceBusHelper;
-        private readonly MainForm mainForm;
-        private readonly WriteToLogDelegate writeToLog;
-        private readonly Func<Task> stopLog;
-        private readonly Action startLog;
         private readonly BindingSource bindingSource = new BindingSource();
         private List<EventHubClient> eventHubClientCollection = new List<EventHubClient>();
         private CancellationTokenSource senderCancellationTokenSource;
@@ -138,6 +124,7 @@ namespace ServiceBusExplorer.Controls
         private int actionCount;
         private int senderTaskCount = 1;
         private bool isSenderFaulted;
+        TestControlHelper controlHelper;
         private BlockingCollection<Tuple<long, long, DirectionType>> blockingCollection;
         private IEventDataGenerator senderEventDataGenerator;
         private IEventDataInspector senderEventDataInspector;
@@ -157,11 +144,7 @@ namespace ServiceBusExplorer.Controls
                                    EventHubDescription eventHubDescription,
                                    PartitionDescription partitionDescription)
         {
-            this.mainForm = mainForm;
-            this.writeToLog = writeToLog;
-            this.stopLog = stopLog;
-            this.startLog = startLog;
-            this.serviceBusHelper = serviceBusHelper;
+            controlHelper = new TestControlHelper(mainForm, writeToLog, stopLog, startLog, serviceBusHelper);
             this.eventHubDescription = eventHubDescription;
             this.partitionDescription = partitionDescription;
             InitializeComponent();
@@ -188,19 +171,19 @@ namespace ServiceBusExplorer.Controls
 
                 grouperMessageProperties.Size = new Size(splitContainer.Panel2.Width, grouperMessageProperties.Size.Height);
 
-                if (serviceBusHelper != null)
+                if (controlHelper.ServiceBusHelper != null)
                 {
-                    if (serviceBusHelper.EventDataInspectors != null)
+                    if (controlHelper.ServiceBusHelper.EventDataInspectors != null)
                     {
-                        foreach (var key in serviceBusHelper.EventDataInspectors.Keys)
+                        foreach (var key in controlHelper.ServiceBusHelper.EventDataInspectors.Keys)
                         {
                             cboSenderInspector.Items.Add(key);
                         }
                     }
 
-                    if (serviceBusHelper.EventDataGenerators != null)
+                    if (controlHelper.ServiceBusHelper.EventDataGenerators != null)
                     {
-                        foreach (var key in serviceBusHelper.EventDataGenerators.Keys)
+                        foreach (var key in controlHelper.ServiceBusHelper.EventDataGenerators.Keys)
                         {
                             cboEventDataGeneratorType.Items.Add(key);
                         }
@@ -211,9 +194,9 @@ namespace ServiceBusExplorer.Controls
                 SetGraphLayout();
 
                 // Populate filenames listview control
-                if (mainForm.FileNames.Any())
+                if (controlHelper.MainForm.FileNames.Any())
                 {
-                    foreach (var tuple in mainForm.FileNames)
+                    foreach (var tuple in controlHelper.MainForm.FileNames)
                     {
                         messageFileListView.Items.Add(new ListViewItem(new[]
                                                         {
@@ -225,8 +208,8 @@ namespace ServiceBusExplorer.Controls
                 }
 
                 // Set Think Time
-                txtSenderThinkTime.Text = mainForm.SenderThinkTime.ToString(CultureInfo.InvariantCulture);
-                senderThinkTime = mainForm.SenderThinkTime;
+                txtSenderThinkTime.Text = controlHelper.MainForm.SenderThinkTime.ToString(CultureInfo.InvariantCulture);
+                senderThinkTime = controlHelper.MainForm.SenderThinkTime;
 
                 // Set Binding Source
                 bindingSource.DataSource = MessagePropertyInfo.Properties;
@@ -290,11 +273,9 @@ namespace ServiceBusExplorer.Controls
                 propertiesDataGridView.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(215, 228, 242);
                 propertiesDataGridView.ColumnHeadersDefaultCellStyle.ForeColor = SystemColors.ControlText;
 
-                LanguageDetector.SetFormattedMessage(serviceBusHelper,
-                                                     mainForm != null && 
-                                                     !string.IsNullOrWhiteSpace(mainForm.MessageText) ?
-                                                     mainForm.MessageText :
-                                                     DefaultMessageText, 
+                controlHelper.IsReadyToStoreMessageText = true;
+                LanguageDetector.SetFormattedMessage(controlHelper.ServiceBusHelper,
+                                                     controlHelper.MainForm.MessageText ?? string.Empty, 
                                                      txtMessageText);
 
                 txtPartitionKey.Text = Guid.NewGuid().ToString();
@@ -340,32 +321,27 @@ namespace ServiceBusExplorer.Controls
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(txtMessageText.Text))
-                {
-                    writeToLog(MessageCannotBeNull);
-                    return false;
-                }
                 if (!int.TryParse(txtMessageCount.Text, out var temp) || temp < 0)
                 {
-                    writeToLog(MessageCountMustBeANumber);
+                    controlHelper.WriteToLog(MessageCountMustBeANumber);
                     return false;
                 }
                 eventDataCount = temp;
                 if (!int.TryParse(txtSendBatchSize.Text, out temp) || temp <= 0)
                 {
-                    writeToLog(SenderBatchSizeMustBeANumber);
+                    controlHelper.WriteToLog(SenderBatchSizeMustBeANumber);
                     return false;
                 }
                 senderBatchSize = temp;
                 if (!int.TryParse(txtSenderThinkTime.Text, out temp) || temp <= 0)
                 {
-                    writeToLog(SenderThinkTimeMustBeANumber);
+                    controlHelper.WriteToLog(SenderThinkTimeMustBeANumber);
                     return false;
                 }
                 senderThinkTime = temp;
                 if (!int.TryParse(txtSendTaskCount.Text, out temp) || temp <= 0)
                 {
-                    writeToLog(SendTaskCountMustBeANumber);
+                    controlHelper.WriteToLog(SendTaskCountMustBeANumber);
                     return false;
                 }
                 senderTaskCount = temp;
@@ -389,12 +365,12 @@ namespace ServiceBusExplorer.Controls
                     return;
                 }
 
-                if (serviceBusHelper != null &&
+                if (controlHelper.ServiceBusHelper != null &&
                     ValidateParameters())
                 {
-                    if (startLog != null)
+                    if (controlHelper.StartLog != null)
                     {
-                        startLog();
+                        controlHelper.StartLog();
                     }
                     btnStart.Enabled = false;
                     Cursor.Current = Cursors.WaitCursor;
@@ -518,7 +494,7 @@ namespace ServiceBusExplorer.Controls
                             eventHubClientCollection.Count < senderTaskCount)
                         {
                             eventHubClientCollection = new List<EventHubClient>(senderTaskCount);
-                            var amqpConnectionString = GetAmqpConnectionString(serviceBusHelper.ConnectionString);
+                            var amqpConnectionString = GetAmqpConnectionString(controlHelper.ServiceBusHelper.ConnectionString);
                             for (var i = 0; i < senderTaskCount; i++)
                             {
                                 eventHubClientCollection.Add(EventHubClient.CreateFromConnectionString(amqpConnectionString, eventHubDescription.Path));
@@ -532,7 +508,7 @@ namespace ServiceBusExplorer.Controls
                         var noPartitionKey = checkBoxNoPartitionKey.Checked;
                         if (messageTabControl.SelectedIndex == MessageTabPage)
                         {
-                            eventDataTemplateList.Add(serviceBusHelper.CreateEventDataTemplate(txtMessageText.Text,
+                            eventDataTemplateList.Add(controlHelper.ServiceBusHelper.CreateEventDataTemplate(txtMessageText.Text,
                                                                                                GetPartitionKey(),
                                                                                                bindingSource.Cast<MessagePropertyInfo>()));
 
@@ -547,7 +523,7 @@ namespace ServiceBusExplorer.Controls
                                 .ToList();
                             if (fileList.Count == 0)
                             {
-                                writeToLog(NoMessageSelected);
+                                controlHelper.WriteToLog(NoFileSelected);
                                 return;
                             }
                             foreach (var fileName in fileList)
@@ -565,7 +541,7 @@ namespace ServiceBusExplorer.Controls
                                                 using (var binaryReader = new BinaryReader(fileStream))
                                                 {
                                                     var bytes = binaryReader.ReadBytes((int) fileStream.Length);
-                                                    template = serviceBusHelper.CreateEventDataTemplate(new MemoryStream(bytes),
+                                                    template = controlHelper.ServiceBusHelper.CreateEventDataTemplate(new MemoryStream(bytes),
                                                                                                         GetPartitionKey(), 
                                                                                                         bindingSource.Cast<MessagePropertyInfo>());
                                                 }
@@ -575,19 +551,19 @@ namespace ServiceBusExplorer.Controls
                                         {
                                             if (radioButtonTextFile.Checked)
                                             {
-                                                template = serviceBusHelper.CreateEventDataTemplate(text, GetPartitionKey(), bindingSource.Cast<MessagePropertyInfo>());
+                                                template = controlHelper.ServiceBusHelper.CreateEventDataTemplate(text, GetPartitionKey(), bindingSource.Cast<MessagePropertyInfo>());
                                             }
                                             else if (radioButtonJsonTemplate.Checked)
                                             {
                                                 try
                                                 {
                                                     var eventDataTemplate = JsonSerializerHelper.Deserialize<EventDataTemplate>(text);
-                                                    template = serviceBusHelper.CreateEventDataTemplate(eventDataTemplate);
+                                                    template = controlHelper.ServiceBusHelper.CreateEventDataTemplate(eventDataTemplate);
                                                 }
                                                 catch (Exception)
                                                 {
-                                                    writeToLog(string.Format(InvalidJsonTemplate, fileName));
-                                                    template = serviceBusHelper.CreateEventDataTemplate(text, GetPartitionKey(), bindingSource.Cast<MessagePropertyInfo>());
+                                                    controlHelper.WriteToLog(string.Format(InvalidJsonTemplate, fileName));
+                                                    template = controlHelper.ServiceBusHelper.CreateEventDataTemplate(text, GetPartitionKey(), bindingSource.Cast<MessagePropertyInfo>());
                                                 }
                                             }
                                             else // XML Template
@@ -595,12 +571,12 @@ namespace ServiceBusExplorer.Controls
                                                 try
                                                 {
                                                     var eventDataTemplate = XmlSerializerHelper.Deserialize<EventDataTemplate>(text);
-                                                    template = serviceBusHelper.CreateEventDataTemplate(eventDataTemplate);
+                                                    template = controlHelper.ServiceBusHelper.CreateEventDataTemplate(eventDataTemplate);
                                                 }
                                                 catch (Exception)
                                                 {
-                                                    writeToLog(string.Format(InvalidXmlTemplate, fileName));
-                                                    template = serviceBusHelper.CreateEventDataTemplate(text, GetPartitionKey(), bindingSource.Cast<MessagePropertyInfo>());
+                                                    controlHelper.WriteToLog(string.Format(InvalidXmlTemplate, fileName));
+                                                    template = controlHelper.ServiceBusHelper.CreateEventDataTemplate(text, GetPartitionKey(), bindingSource.Cast<MessagePropertyInfo>());
                                                 }
                                             }
                                         }
@@ -623,7 +599,7 @@ namespace ServiceBusExplorer.Controls
                                 senderEventDataGenerator = eventDataGeneratorPropertyGrid.SelectedObject as IEventDataGenerator;
                                 if (senderEventDataGenerator != null)
                                 {
-                                    eventDataTemplateList = new List<EventData>(senderEventDataGenerator.GenerateEventDataCollection(txtMessageCount.IntegerValue, writeToLog));
+                                    eventDataTemplateList = new List<EventData>(senderEventDataGenerator.GenerateEventDataCollection(txtMessageCount.IntegerValue, controlHelper.WriteToLog));
                                 }
                             }
                             catch (Exception ex)
@@ -636,7 +612,7 @@ namespace ServiceBusExplorer.Controls
                             senderCancellationTokenSource = new CancellationTokenSource();
                             currentIndex = 0;
                             senderEventDataInspector = cboSenderInspector.SelectedIndex > 0
-                                                         ? Activator.CreateInstance(serviceBusHelper.EventDataInspectors[cboSenderInspector.Text]) as IEventDataInspector
+                                                         ? Activator.CreateInstance(controlHelper.ServiceBusHelper.EventDataInspectors[cboSenderInspector.Text]) as IEventDataInspector
                                                          : null;
 
                             Func<long> getMessageNumber = () =>
@@ -651,7 +627,7 @@ namespace ServiceBusExplorer.Controls
                                 {
                                     try
                                     {
-                                        var traceMessage = serviceBusHelper.SendEventData(eventHubClientCollection[taskId],
+                                        var traceMessage = controlHelper.ServiceBusHelper.SendEventData(eventHubClientCollection[taskId],
                                                                                             messageTemplateEnumerable,
                                                                                             getMessageNumber,
                                                                                             eventDataCount,
@@ -674,7 +650,7 @@ namespace ServiceBusExplorer.Controls
                                                                                             null).Result;
                                         if (!string.IsNullOrWhiteSpace(traceMessage))
                                         {
-                                            writeToLog(traceMessage.Substring(0, traceMessage.Length - 1));
+                                            controlHelper.WriteToLog(traceMessage.Substring(0, traceMessage.Length - 1));
                                         }
                                     }
                                     catch (Exception ex)
@@ -748,10 +724,10 @@ namespace ServiceBusExplorer.Controls
             {
                 return;
             }
-            writeToLog(string.Format(CultureInfo.CurrentCulture, ExceptionFormat, ex.Message));
+            controlHelper.WriteToLog(string.Format(CultureInfo.CurrentCulture, TestControlHelper.ExceptionFormat, ex.Message));
             if (ex.InnerException != null && !string.IsNullOrWhiteSpace(ex.InnerException.Message))
             {
-                writeToLog(string.Format(CultureInfo.CurrentCulture, InnerExceptionFormat, ex.InnerException.Message));
+                controlHelper.WriteToLog(string.Format(CultureInfo.CurrentCulture, TestControlHelper.InnerExceptionFormat, ex.InnerException.Message));
             }
         }
 
@@ -869,9 +845,9 @@ namespace ServiceBusExplorer.Controls
 
         internal async Task CancelActions()
         {
-            if (stopLog != null)
+            if (controlHelper.StopLog != null)
             {
-                await stopLog();
+                await controlHelper.StopLog();
             }
             if (managerCancellationTokenSource != null)
             {
@@ -928,9 +904,9 @@ namespace ServiceBusExplorer.Controls
                         return;
                     }
                     txtMessageText.Text = XmlHelper.Indent(text);
-                    if (mainForm != null)
+                    if (controlHelper.MainForm != null)
                     {
-                        mainForm.MessageText = text;
+                        controlHelper.MainForm.MessageText = text;
                     }
                 }
             }
@@ -976,15 +952,15 @@ namespace ServiceBusExplorer.Controls
                 senderAverageTime = senderMessageNumber > 0 ? senderTotalTime / senderMessageNumber : 0;
                 senderMessagesPerSecond = senderTotalTime > 0 ? senderMessageNumber * senderTaskCount / senderTotalTime : 0;
 
-                lblSenderLastTime.Text = string.Format(LabelFormat, elapsedSeconds);
+                lblSenderLastTime.Text = string.Format(TestControlHelper.LabelFormat, elapsedSeconds);
                 lblSenderLastTime.Refresh();
-                lblSenderAverageTime.Text = string.Format(LabelFormat, senderAverageTime);
+                lblSenderAverageTime.Text = string.Format(TestControlHelper.LabelFormat, senderAverageTime);
                 lblSenderAverageTime.Refresh();
-                lblSenderMaximumTime.Text = string.Format(LabelFormat, senderMaximumTime);
+                lblSenderMaximumTime.Text = string.Format(TestControlHelper.LabelFormat, senderMaximumTime);
                 lblSenderMaximumTime.Refresh();
-                lblSenderMinimumTime.Text = string.Format(LabelFormat, senderMinimumTime);
+                lblSenderMinimumTime.Text = string.Format(TestControlHelper.LabelFormat, senderMinimumTime);
                 lblSenderMinimumTime.Refresh();
-                lblSenderMessagesPerSecond.Text = string.Format(LabelFormat, senderMessagesPerSecond);
+                lblSenderMessagesPerSecond.Text = string.Format(TestControlHelper.LabelFormat, senderMessagesPerSecond);
                 lblSenderMessagesPerSecond.Refresh();
                 lblSenderMessageNumber.Text = senderMessageNumber.ToString(CultureInfo.InvariantCulture);
                 lblSenderMessageNumber.Refresh();
@@ -1135,7 +1111,7 @@ namespace ServiceBusExplorer.Controls
                     fileInfo.FullName,
                     size
                 }) { Checked = true });
-                mainForm.FileNames.Add(new Tuple<string, string>(fileInfo.FullName, size));
+                controlHelper.MainForm.FileNames.Add(new Tuple<string, string>(fileInfo.FullName, size));
             }
             checkBoxFileName.Checked = messageFileListView.Items.Cast<ListViewItem>().All(i => i.Checked);
             var fileList = messageFileListView.Items.Cast<ListViewItem>()
@@ -1211,7 +1187,7 @@ namespace ServiceBusExplorer.Controls
         private void btnClearFiles_Click(object sender, EventArgs e)
         {
             messageFileListView.Items.Clear();
-            mainForm.FileNames.Clear();
+            controlHelper.MainForm.FileNames.Clear();
             btnClearFiles.Enabled = false;
         }
 
@@ -1252,11 +1228,11 @@ namespace ServiceBusExplorer.Controls
                 {
                     return;
                 }
-                if (!serviceBusHelper.EventDataGenerators.ContainsKey(cboEventDataGeneratorType.Text))
+                if (!controlHelper.ServiceBusHelper.EventDataGenerators.ContainsKey(cboEventDataGeneratorType.Text))
                 {
                     return;
                 }
-                var type = serviceBusHelper.EventDataGenerators[cboEventDataGeneratorType.Text];
+                var type = controlHelper.ServiceBusHelper.EventDataGenerators[cboEventDataGeneratorType.Text];
                 if (type == null)
                 {
                     return;
@@ -1380,10 +1356,7 @@ namespace ServiceBusExplorer.Controls
 
         private void txtMessageText_TextChanged(object sender, FastColoredTextBoxNS.TextChangedEventArgs e)
         {
-            if (!string.IsNullOrWhiteSpace(txtMessageText.Text))
-            {
-                mainForm.MessageText = txtMessageText.Text;
-            }
+            controlHelper.OnMessageTextChanged(txtMessageText.Text);
         }
 
         private void cboMessageFormat_SelectedIndexChanged(object sender, EventArgs e)

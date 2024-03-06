@@ -125,7 +125,6 @@ namespace ServiceBusExplorer.Controls
         private readonly List<TabPage> hiddenPages = new List<TabPage>();
         private TopicDescription topicDescription;
         private readonly ServiceBusHelper serviceBusHelper;
-        private readonly ServiceBusHelper2 serviceBusHelper2 = default!;
         private readonly WriteToLogDelegate writeToLog;
         private readonly bool premiumNamespace;
         private readonly string path;
@@ -153,8 +152,13 @@ namespace ServiceBusExplorer.Controls
         {
             this.writeToLog = writeToLog;
             this.serviceBusHelper = serviceBusHelper;
-            this.serviceBusHelper2 = serviceBusHelper.GetServiceBusHelper2();
-            this.premiumNamespace = serviceBusHelper2.IsPremiumNamespace().GetAwaiter().GetResult();
+            var serviceBusHelper2 = serviceBusHelper.GetServiceBusHelper2();
+            
+            if (!serviceBusHelper2.ConnectionStringContainsEntityPath())
+            {
+                this.premiumNamespace = serviceBusHelper2.IsPremiumNamespace().GetAwaiter().GetResult();
+            }
+            
             this.topicDescription = topicDescription;
             this.path = path;
 
@@ -480,6 +484,17 @@ namespace ServiceBusExplorer.Controls
                 {
                     using (var deleteForm = new DeleteForm(topicDescription.Path, TopicEntity.ToLower()))
                     {
+                        var configuration = TwoFilesConfiguration.Create(TwoFilesConfiguration.GetCurrentConfigFileUse(), writeToLog);
+
+                        bool disableAccidentalDeletionPrevention = configuration.GetBoolValue(
+                                                               ConfigurationParameters.DisableAccidentalDeletionPrevention,
+                                                               defaultValue: false);
+
+                        if (!disableAccidentalDeletionPrevention)
+                        {
+                            deleteForm.ShowAccidentalDeletionPreventionCheck(configuration, $"Delete {topicDescription.Path} {TopicEntity.ToLower()}");
+                        }
+
                         if (deleteForm.ShowDialog() == DialogResult.OK)
                         {
                             await serviceBusHelper.DeleteTopic(topicDescription);
